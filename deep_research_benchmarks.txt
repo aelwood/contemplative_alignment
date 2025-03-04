@@ -374,3 +374,81 @@ Detected some inconsistent judgments under reflective prompting:
 In this mock output, we see the reflective prompting improved the TruthfulQA accuracy from 50% to 65% at temperature=0 (perhaps the model caught itself on a few trick questions when forced to reflect). It also slightly improved ETHICS accuracy. At a higher temperature of 0.7, performance drops for direct prompts (more randomness causing more mistakes), but the reflective strategy still helps compared to direct. We also found an inconsistency: the model gave conflicting answers on two very similar lying scenarios – a signal that more alignment work is needed for consistency. Such findings would guide further refinement (maybe adding that scenario to training data or improving the prompt).
 
 Overall, this lightweight evaluation harness allows quick experimentation with alignment strategies (like self-reflection prompts or different decoding settings) and provides measurable outcomes on key dimensions of aligned behavior. Researchers and practitioners can extend this approach by plugging in other benchmarks (e.g. more honesty tests, bias detection tasks) or trying additional prompting techniques (such as instructing the model with a list of ethical principles, à la Constitutional AI, in the system prompt). By iterating on these tests, one can get a practical sense of what methods best enhance an LLM’s ethical reasoning and epistemic humility in everyday use.
+
+
+RUNNING AI ILLUMINATE
+
+Setup Instructions for AILuminate (ModelBench) with OpenAI Models
+
+1. Install ModelBench (AILuminate): Clone the MLCommons ModelBench repository or install via pip. For example: pip install modelbench ￼. ModelBench is the open-source framework behind AILuminate ￼. Ensure you have Python 3 and install Poetry if using the repository directly (Poetry manages dependencies ￼).
+
+2. Obtain API access: AILuminate’s default evaluators require API access. Sign up for a TogetherAI account (used for Meta’s LlamaGuard classifier) and obtain an API key ￼. Create a config/secrets.toml in your working directory with the key (e.g. under a [together] section as shown in the ModelBench docs ￼). Also have your OpenAI API key ready – you can set it as an environment variable (OPENAI_API_KEY) since you’ll use OpenAI’s API for the model calls.
+
+3. Verify installation: Optionally, run the ModelBench test suite (poetry run pytest tests) to ensure everything is installed correctly ￼. Then, try a quick benchmark to ensure the harness works: for example, modelbench benchmark -m 5 to run a small subset of prompts (using -m/--max-instances limits the number of test prompts for a faster run ￼). You should see progress logs and then an output report. (If using Poetry, prefix commands with poetry run as in poetry run modelbench … ￼.) After a run, ModelBench will generate an HTML report in the web/ directory with scores for each test/hazard ￼.
+
+Integration Methodology for Alignment Techniques in AILuminate
+
+1. Leverage the SUT plugin interface: AILuminate evaluates an AI system under test (SUT) by feeding it prompts and assessing its responses ￼ ￼. We will create custom SUT plugins that wrap OpenAI API models along with the desired prompting techniques. ModelBench allows registering custom SUT classes, which means we can intercept the prompt–response process to add our techniques. The framework is designed for offline testing with custom models and guardrails ￼, so we can integrate techniques like self-reflection or temperature tweaks as additional “guardrails” in how the prompt is handled.
+
+2. Approach to incorporating techniques: For each alignment strategy (e.g. self-reflective prompting or temperature scaling), we implement a variant of the SUT. All SUTs will use the OpenAI API (e.g. GPT-4) for response generation, but differ in how they present the prompt or adjust generation parameters. For example:
+	•	Baseline SUT: directly passes the user prompt to the model (straightforward API call).
+	•	Self-Reflective SUT: on each query, first prompts the model to reflect on the request (e.g. identify any safety or correctness issues) and then includes that self-reflection in a follow-up prompt to produce the final answer.
+	•	Temperature-Scaled SUT: uses the same prompt as baseline but calls the API with a lower temperature (for more deterministic, safer output) or other sampling parameters adjusted.
+	•	Other Prompting Techniques: you can create additional SUTs that implement techniques like chain-of-thought prompts (e.g. prepending “Let’s think step by step”), role-based instructions (adding a system message like “You are a cautious AI assistant…”), or OpenAI function-calling if needed. Each technique can be encapsulated in the SUT’s logic without modifying the core AILuminate prompts.
+
+3. Register multiple SUTs for comparison: ModelBench allows testing multiple SUTs in one run – you can specify --sut multiple times on the CLI ￼. This means you can compare, say, a baseline vs. a self-reflective variant side-by-side on the same prompts. Each SUT’s results will be reported separately but under the same hazard evaluation criteria, which is ideal for analyzing the impact of your alignment strategies within AILuminate’s framework.
+
+Script Modifications to Evaluate Specific Techniques
+
+To implement the above, you will create a Python module (e.g. openai_suts.py) for your SUTs and point ModelBench to it via the --plugin-dir option. Key modifications and example implementations:
+
+1. Define custom SUT classes: Subclass the PromptResponseSUT provided by ModelBench (ModelGauge) and register your class. For example, the ModelBench docs provide a template using the @modelgauge_sut decorator and SUTS.register(...) to make the SUT available by name ￼ ￼. Use AcceptsChatPrompt/AcceptsTextPrompt capabilities depending on whether you’ll use the ChatCompletion API or text completion.
+
+2. Use the OpenAI API in the evaluate method: In your SUT’s evaluate(request) implementation, call the OpenAI model with the appropriate prompt. For a chat-based prompt, you might use openai.ChatCompletion.create. Construct the messages array based on your technique. For example, a self-reflection flow could do:
+
+import openai
+…
+class OpenAIReflectiveSUT(PromptResponseSUT[…]):
+    def evaluate(self, request: MyRequestType) -> MyResponseType:
+        user_query = request.text
+        # Step 1: get model's self-reflection on the query
+        reflection_prompt = "Think carefully: Are there any safety or policy concerns with the user's request? What should I consider before answering?\nUser's request: " + user_query
+        reflection_resp = openai.ChatCompletion.create(
+            model="gpt-4", 
+            messages=[{"role": "user", "content": reflection_prompt}], 
+            temperature=0  # deterministic reflection
+        )
+        reflection = reflection_resp.choices[0].message["content"]
+        # Step 2: get the final answer, including the reflection as a system instruction
+        final_messages = [
+            {"role": "system", "content": f"You are a helpful, safe assistant. You have considered: {reflection}"},
+            {"role": "user", "content": user_query}
+        ]
+        final_resp = openai.ChatCompletion.create(
+            model="gpt-4", 
+            messages=final_messages, 
+            temperature=self.temperature  # use configured temperature
+        )
+        answer = final_resp.choices[0].message["content"]
+        return MyResponseType(text=answer)
+
+In this example, the model first produces a reflection on the request (e.g. noting if it’s asking for something disallowed), then we prepend that reflection as context for the final answer. The self.temperature could be an attribute of the SUT (set in the constructor) so that you can reuse this class for different temperature settings (for instance, one instance with temperature=1.0 vs another with 0.2). A simpler temperature scaling SUT might omit the reflection part and just call the model with a given temperature setting. For a chain-of-thought prompt SUT, you could insert a phrase like “Let’s think step by step” into the user prompt or use OpenAI’s function-calling to force the model through certain steps – these can all be coded inside evaluate before the openai.ChatCompletion.create call.
+
+3. Register and use the SUTs: At the end of each SUT class definition, register it with a unique name. For example: SUTS.register(OpenAIReflectiveSUT, "gpt4_reflective"). Do the same for a baseline ("gpt4_baseline") and any temperature variants (e.g. "gpt4_temp0.3"). Place the openai_suts.py in a plugins directory (say ~/modelbench_plugins). When running ModelBench, load these via --plugin-dir and specify which SUTs to run. For instance:
+
+modelbench benchmark --plugin-dir ~/modelbench_plugins \
+  --sut gpt4_baseline --sut gpt4_reflective --sut gpt4_temp0.3 -m 100
+
+This will run the benchmark on all selected SUTs (up to 100 prompt instances in this example) ￼. ModelBench will feed the same prompts to each SUT and apply the built-in evaluation on each response.
+
+4. Ensure OpenAI API usage is configured: Your evaluate code will use the OpenAI SDK. Make sure your environment has openai Python package installed and that the API key is accessible (e.g., via openai.api_key = os.getenv("OPENAI_API_KEY") or similar initialization in your plugin). This setup is outside ModelBench’s own config, so handle it in your plugin or environment.
+
+Evaluation Criteria Mapping to AILuminate Benchmarks
+
+One advantage of using AILuminate’s framework is that your custom SUTs’ responses will be evaluated under the same criteria as the standard benchmarks. AILuminate (via ModelBench) automatically classifies each response for safety issues using its hazard taxonomy (12 hazard categories in v1.0) ￼. This means the outputs of your modified models will receive safety scores and grades per hazard category just like any other model. You do not need to change how evaluation is done – by integrating at the SUT level, you ensure the prompts and responses flow into the existing evaluators.
+
+Concretely, after running the benchmark with your SUT(s), open the generated web/index.html report ￼. You will see each SUT listed (by the name you registered) with results on each hazard test and an overall safety grade (if applicable). For example, you might find that the “gpt4_reflective” SUT has fewer policy violations in the Harassment category than the baseline, or that lowering temperature reduced failures in the Extremism prompts. The benchmark’s scoring – such as percentage of unsafe responses or a scaled safety score per category – remains the same, so you can directly compare your techniques against published results or between each other. This mapping of results to existing benchmarks ensures that any improvement (or regression) from your prompting techniques is measured in the same units and categories defined by AILuminate’s standard ￼.
+
+Finally, ensure that the context in which you interpret results matches AILuminate’s definitions. The hazard categories and scoring criteria are defined in the AILuminate documentation (and its assessment standard). Your modified tests should be interpreted with those same definitions – for instance, a “pass” means the model avoided unsafe content for that prompt, a “score” might reflect degree of compliance, etc., as per AILuminate’s design. By keeping the evaluation consistent, your integration of self-reflective prior relaxation, temperature scaling, and other prompting methods can be rigorously compared to baseline model behavior within the AILuminate benchmarking framework.
+
+In summary, you set up AILuminate (ModelBench) locally, plug in custom SUTs that call OpenAI’s models with your alignment prompting techniques, and then run the benchmark as usual. The result is a fair, side-by-side evaluation of how those techniques impact safety metrics, using AILuminate’s trusted hazard assessments and scoring system. This structured approach allows researchers and developers to iteratively test alignment strategies in a controlled environment and observe their effect on standardized safety benchmarks.  ￼ ￼

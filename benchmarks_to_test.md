@@ -3,12 +3,13 @@
 ## **Evaluation Checklist**
 | Benchmark                | Baseline Prompting | Self-Reflective Prompting | Temperature Scaling |
 |--------------------------|-------------------|-------------------------|--------------------|
-| **TruthfulQA**          |                 |                       |                  |
-| **ETHICS Benchmark**    |                 |                       |                  |
-| **RealToxicityPrompts** |                 |                       |                  |
-| **Self-Consistency Testing** |           |                       |                  |
-| **Adversarial Robustness** |              |                       |                  |
-| **Epistemic Calibration** |               |                       |                  |
+| **TruthfulQA**          |                   |                         |                    |
+| **ETHICS Benchmark**    |                   |                         |                    |
+| **RealToxicityPrompts** |                   |                         |                    |
+| **Self-Consistency Testing** |               |                         |                    |
+| **Adversarial Robustness** |                 |                         |                    |
+| **Epistemic Calibration** |                 |                         |                    |
+| **AILuminate Benchmark** |                 |                         |                    |
 
 ## **Overview**
 This document outlines key benchmarks for testing ethical reasoning and epistemic humility in Large Language Models (LLMs). The selected benchmarks cover **truthfulness, moral reasoning, self-awareness, and robustness to adversarial prompts**. These tests will help assess the impact of **self-reflective prior reduction prompting**, **temperature scaling**, and other alignment techniques.
@@ -67,6 +68,17 @@ This document outlines key benchmarks for testing ethical reasoning and epistemi
   - Rate of self-identified mistakes before final answer.
 - **Relevance:** Directly measures **reflective prior-reduction prompting**, testing if models can check their own work.
 
+## **7. AILuminate Benchmark** (Comprehensive AI Safety Evaluation)
+- **Why?** Designed to assess general-purpose AI chat systems' safety across multiple hazard categories.
+- **Test Structure:** Covers three major hazard categories:
+  - **Physical Hazards:** Includes child exploitation, violent crimes, weapons creation, and self-harm.
+  - **Non-Physical Hazards:** Covers defamation, privacy breaches, hate speech, and intellectual property violations.
+  - **Contextual Hazards:** Tests inappropriate sexual content and AI providing unqualified financial, medical, or legal advice.
+- **Evaluation Metrics:**
+  - AI responses are graded on a scale from Poor to Excellent based on adherence to safety guidelines.
+  - Measures compliance with safety principles while balancing helpfulness.
+- **Relevance:** Helps evaluate **robustness, harm avoidance, and ethical integrity** in AI decision-making.
+
 ---
 
 ## **Implementation Plan**
@@ -79,6 +91,7 @@ This document outlines key benchmarks for testing ethical reasoning and epistemi
   - **Ethical consistency & robustness** (ETHICS and self-consistency evaluations).
   - **Reduction in harmful completions** (RealToxicityPrompts & red-teaming results).
   - **Epistemic calibration** (uncertainty acknowledgment & belief updating).
+  - **Safety compliance** (AILuminate performance on hazard-related prompts).
 
 This methodology ensures that our tests comprehensively evaluate whether **alignment techniques (like self-reflective prompting) improve model safety, ethical decision-making, and robustness.**
 
