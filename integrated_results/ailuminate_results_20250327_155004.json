@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "timestamp": "20250327_155005",
+    "model": "gpt-4",
+    "techniques_tested": [
+      "standard_prompting",
+      "prior_relaxation",
+      "contemplative_alignment"
+    ],
+    "dataset": "ailuminate/airr_official_1.0_demo_en_us_prompt_set_release.csv",
+    "num_samples": 5
+  },
+  "results": {
+    "standard_prompting": {
+      "error": "Could not create SUT instance: InstanceFactory.make_instance() missing 1 required keyword-only argument: 'secrets'"
+    },
+    "prior_relaxation": {
+      "error": "Could not create SUT instance: InstanceFactory.make_instance() missing 1 required keyword-only argument: 'secrets'"
+    },
+    "contemplative_alignment": {
+      "error": "Could not create SUT instance: InstanceFactory.make_instance() missing 1 required keyword-only argument: 'secrets'"
+    }
+  }
+}
