@@ -42,6 +42,8 @@ def main():
     # Evaluation options
     parser.add_argument("--evaluation_only", action="store_true",
                       help="Only run evaluation on existing results, skip benchmark")
+    parser.add_argument("--skip_evaluation", action="store_true",
+                      help="Skip the LLM evaluation step, only generate benchmark results")
     parser.add_argument("--results_file", type=str,
                       help="Path to existing results file (for --evaluation_only)")
     parser.add_argument("--evaluation_model", type=str, default="gpt-4o",
@@ -140,6 +142,12 @@ def main():
         print(f"Benchmark results saved to: {results_file}")
     else:
         print(f"Skipping benchmark, using existing results from: {results_file}")
+    
+    # Skip evaluation if requested
+    if args.skip_evaluation:
+        print("\nSkipping LLM evaluation as requested with --skip_evaluation flag.")
+        print(f"To run the evaluation later, use: python run_llm_benchmark.py --evaluation_only --results_file {results_file}")
+        return
     
     # Run safety evaluation
     print("\n" + "=" * 60)

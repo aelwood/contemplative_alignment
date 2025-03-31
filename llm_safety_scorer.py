@@ -311,12 +311,22 @@ Please provide your evaluation in JSON format with the following structure:
         safety_scores = {technique: [] for technique in techniques}
         hazard_scores = {hazard: {technique: [] for technique in techniques} for hazard in self.hazard_weights}
         
+        # Store detailed evaluations for saving to JSON
+        detailed_evaluations = []
+        
         # Evaluate each sample
         print(f"Evaluating {len(samples)} samples across {len(techniques)} techniques...")
         for i, sample in enumerate(samples):
             print(f"Evaluating sample {i+1}/{len(samples)}...")
             prompt_text = sample["prompt_text"]
             hazard = sample["hazard"]
+            
+            sample_evaluations = {
+                "prompt_id": sample.get("prompt_id", f"prompt_{i}"),
+                "prompt_text": prompt_text,
+                "hazard": hazard,
+                "techniques": {}
+            }
             
             for technique in techniques:
                 response = sample["techniques"][technique]["response"]
@@ -334,6 +344,14 @@ Please provide your evaluation in JSON format with the following structure:
                 
                 if hazard in hazard_scores:
                     hazard_scores[hazard][technique].append(safety_score)
+                
+                # Store detailed evaluation for this technique
+                sample_evaluations["techniques"][technique] = {
+                    "response": response,
+                    "evaluation": evaluation
+                }
+            
+            detailed_evaluations.append(sample_evaluations)
         
         # Calculate average scores
         avg_scores = {
@@ -353,8 +371,46 @@ Please provide your evaluation in JSON format with the following structure:
             "safety_scores": safety_scores,
             "avg_safety_scores": avg_scores,
             "hazard_scores": hazard_scores,
-            "avg_hazard_scores": avg_hazard_scores
+            "avg_hazard_scores": avg_hazard_scores,
+            "detailed_evaluations": detailed_evaluations
         }
+    
+    def save_detailed_evaluations(self, comparison: Dict[str, Any], output_dir: str) -> str:
+        """
+        Save detailed evaluations to a JSON file.
+        
+        Args:
+            comparison: Comparison results dictionary with detailed evaluations
+            output_dir: Directory to save the JSON file
+            
+        Returns:
+            Path to the saved JSON file
+        """
+        os.makedirs(output_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        json_file = os.path.join(output_dir, f"detailed_evaluations_{timestamp}.json")
+        
+        # Extract just the detailed evaluations
+        detailed_evaluations = comparison.get("detailed_evaluations", [])
+        
+        # Create a structure with metadata
+        evaluation_data = {
+            "metadata": {
+                "timestamp": timestamp,
+                "model": self.model,
+                "evaluation_criteria": self.criteria,
+                "hazard_weights": self.hazard_weights
+            },
+            "evaluations": detailed_evaluations
+        }
+        
+        # Save to JSON file
+        with open(json_file, 'w') as f:
+            json.dump(evaluation_data, f, indent=2)
+        
+        print(f"Detailed evaluations saved to: {json_file}")
+        return json_file
     
     def generate_safety_report(self, results_file: str, output_dir: str = "llm_safety_analysis") -> str:
         """
@@ -372,6 +428,9 @@ Please provide your evaluation in JSON format with the following structure:
         # Compare techniques
         print("Comparing techniques...")
         comparison = self.compare_techniques(results_file)
+        
+        # Save detailed evaluations to JSON
+        self.save_detailed_evaluations(comparison, output_dir)
         
         # Load original results for metadata
         with open(results_file, 'r') as f:
